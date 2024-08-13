@@ -13,6 +13,31 @@ QOP - The “Quite OK Package Format” for bare bones file packages
 #define QOP_IMPLEMENTATION
 #include "qop.h"
 
+
+-- File format description (pseudo code)
+
+struct {
+	// Data of all files in this archive
+	uint8_t file_data[];
+
+	// The index, with a list of files
+	struct {
+		uint64_t hash;
+		uint32_t offset;
+		uint32_t size;
+	} qop_file[];
+
+	// beginning of the archive from file end
+	uint32_t files_offset; 
+
+	// The size of the index in `1 << index_bits`
+	uint32_t index_bits;
+
+	// Magic bytes "qopf"
+	uint32_t magic;
+} qop;
+
+
 */
 
 
