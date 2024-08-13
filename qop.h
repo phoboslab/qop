@@ -27,10 +27,10 @@ struct {
 		uint32_t size;
 	} qop_file[];
 
-	// beginning of the archive from file end
+	// Beginning of the archive from file end
 	uint32_t files_offset; 
 
-	// The size of the index in `1 << index_bits`
+	// The length of the index in `1 << index_bits`
 	uint32_t index_bits;
 
 	// Magic bytes "qopf"
