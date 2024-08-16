@@ -70,7 +70,7 @@ typedef struct {
 	qop_file *index;
 	unsigned int files_offset;
 	unsigned int index_offset;
-	unsigned int index_bits;
+	unsigned int index_len;
 	unsigned int index_size;
 } qop_desc;
 
@@ -178,40 +178,36 @@ int qop_open(const char *path, qop_desc *qop) {
 	qop->fh = fh;
 	qop->index = NULL;
 	qop->files_offset  = size - qop_read_32(fh);
-	qop->index_bits    = qop_read_32(fh);
+	unsigned int index_bits = qop_read_32(fh);
 	unsigned int magic = qop_read_32(fh);
 
-	if (
-		magic != QOP_MAGIC || 
-		qop->index_bits == 0 ||
-		qop->index_bits > 24
-	) {
+	// Check magic, make sure index size is within bounds
+	if (magic != QOP_MAGIC || index_bits == 0 || index_bits > 30) {
 		fclose(fh);
 		return 0;
 	}
-	unsigned int index_len = (1 << qop->index_bits);
-	qop->index_size = index_len * sizeof(qop_file);
+	qop->index_len = (1 << index_bits);
+	qop->index_size = qop->index_len * sizeof(qop_file);
 
 	// Actual index size in the file might be different from the qop->index_size
 	// because of alignment, so always calculate index_offset with the packed
 	// 20 byte size.
-	qop->index_offset = size - index_len * 20 - QOP_HEADER_SIZE;
+	qop->index_offset = size - qop->index_len * 20 - QOP_HEADER_SIZE;
 	return size;	
 }
 
 int qop_read_index(qop_desc *qop, void *buffer) {
-	int len = 1 << qop->index_bits;
 	qop->index = buffer;
 
 	fseek(qop->fh, qop->index_offset, SEEK_SET);
-	for (int i = 0; i < len; i++) {
+	for (unsigned int i = 0; i < qop->index_len; i++) {
 		qop->index[i].hash     = qop_read_64(qop->fh);
 		qop->index[i].offset   = qop_read_32(qop->fh);
 		qop->index[i].size     = qop_read_32(qop->fh);
 		qop->index[i].path_len = qop_read_16(qop->fh);
 		qop->index[i].flags    = qop_read_16(qop->fh);
 	}
-	return len;
+	return qop->index_len;
 }
 
 void qop_close(qop_desc *qop) {
@@ -223,8 +219,7 @@ qop_file *qop_find(qop_desc *qop, const char *path) {
 		return NULL;
 	}
 
-	int len = 1 << qop->index_bits;
-	int mask = len - 1;
+	int mask = qop->index_len - 1;
 
 	qop_uint64_t hash = qop_hash(path);
 	for (int idx = hash & mask; qop->index[idx].size > 0; idx++) {
