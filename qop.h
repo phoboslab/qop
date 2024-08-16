@@ -53,10 +53,16 @@ extern "C" {
 
 #include <stdio.h>
 
+#define QOP_FLAG_NONE               0
+#define QOP_FLAG_COMPRESSED_ZSTD    1
+#define QOP_FLAG_COMPRESSED_DEFLATE 2
+
 typedef struct {
 	unsigned long long hash;
 	unsigned int offset;
 	unsigned int size;
+	unsigned short path_len;
+	unsigned short flags;
 } qop_file;
 
 typedef struct {
@@ -88,6 +94,10 @@ qop_file *qop_find(qop_desc *qop, const char *path);
 // Read the whole file into dest. The dest buffer must be at least file->size
 // bytes long.
 int qop_read(qop_desc *qop, qop_file *file, unsigned char *dest);
+
+// Copy the path of the file into dest. The dest buffer must be at least 
+// file->path_len bytes long.
+int qop_read_path(qop_desc *qop, qop_file *file, char *dest);
 
 // Read part of a file into dest. The dest buffer must be at least len bytes
 // long
@@ -124,7 +134,15 @@ static inline qop_uint64_t qop_hash(const char *key) {
   	return h;
 }
 
-unsigned int qop_read_32(FILE *fh) {
+static unsigned short qop_read_16(FILE *fh) {
+	unsigned char b[sizeof(unsigned short)] = {0};
+	if (fread(b, sizeof(unsigned short), 1, fh) != 1) {
+		return 0;
+	}
+	return (b[1] << 8) | b[0];
+}
+
+static unsigned int qop_read_32(FILE *fh) {
 	unsigned char b[sizeof(unsigned int)] = {0};
 	if (fread(b, sizeof(unsigned int), 1, fh) != 1) {
 		return 0;
@@ -132,7 +150,7 @@ unsigned int qop_read_32(FILE *fh) {
 	return (b[3] << 24) | (b[2] << 16) | (b[1] << 8) | b[0];
 }
 
-qop_uint64_t qop_read_64(FILE *fh) {
+static qop_uint64_t qop_read_64(FILE *fh) {
 	unsigned char b[sizeof(qop_uint64_t)] = {0};
 	if (fread(b, sizeof(qop_uint64_t), 1, fh) != 1) {
 		return 0;
@@ -171,9 +189,13 @@ int qop_open(const char *path, qop_desc *qop) {
 		fclose(fh);
 		return 0;
 	}
+	unsigned int index_len = (1 << qop->index_bits);
+	qop->index_size = index_len * sizeof(qop_file);
 
-	qop->index_size = (1 << qop->index_bits) * sizeof(qop_file);
-	qop->index_offset = size - qop->index_size - QOP_HEADER_SIZE;
+	// Actual index size in the file might be different from the qop->index_size
+	// because of alignment, so always calculate index_offset with the packed
+	// 20 byte size.
+	qop->index_offset = size - index_len * 20 - QOP_HEADER_SIZE;
 	return size;	
 }
 
@@ -183,9 +205,11 @@ int qop_read_index(qop_desc *qop, void *buffer) {
 
 	fseek(qop->fh, qop->index_offset, SEEK_SET);
 	for (int i = 0; i < len; i++) {
-		qop->index[i].hash   = qop_read_64(qop->fh);
-		qop->index[i].offset = qop_read_32(qop->fh);
-		qop->index[i].size   = qop_read_32(qop->fh);
+		qop->index[i].hash     = qop_read_64(qop->fh);
+		qop->index[i].offset   = qop_read_32(qop->fh);
+		qop->index[i].size     = qop_read_32(qop->fh);
+		qop->index[i].path_len = qop_read_16(qop->fh);
+		qop->index[i].flags    = qop_read_16(qop->fh);
 	}
 	return len;
 }
@@ -212,12 +236,17 @@ qop_file *qop_find(qop_desc *qop, const char *path) {
 }
 
 int qop_read(qop_desc *qop, qop_file *file, unsigned char *dest) {
-	fseek(qop->fh, qop->files_offset + file->offset, SEEK_SET);
+	fseek(qop->fh, qop->files_offset + file->offset + file->path_len, SEEK_SET);
 	return fread(dest, 1, file->size, qop->fh);
 }
 
+int qop_read_path(qop_desc *qop, qop_file *file, char *dest) {
+	fseek(qop->fh, qop->files_offset + file->offset, SEEK_SET);
+	return fread(dest, 1, file->path_len, qop->fh);
+}
+
 int qop_read_ex(qop_desc *qop, qop_file *file, unsigned char *dest, unsigned int start, unsigned int len) {
-	fseek(qop->fh, qop->files_offset + file->offset + start, SEEK_SET);
+	fseek(qop->fh, qop->files_offset + file->offset + file->path_len + start, SEEK_SET);
 	return fread(dest, 1, len, qop->fh);
 }
 

@@ -40,6 +40,14 @@ typedef struct {
 	int size;
 } qop_state;
 
+void write_16(unsigned int v, FILE *fh) {
+	unsigned char b[sizeof(unsigned short)];
+	b[0] = 0xff & (v      );
+	b[1] = 0xff & (v >>  8);
+	int written = fwrite(b, sizeof(unsigned short), 1, fh);
+	error_if(!written, "Write error");
+}
+
 void write_32(unsigned int v, FILE *fh) {
 	unsigned char b[sizeof(unsigned int)];
 	b[0] = 0xff & (v      );
@@ -74,7 +82,7 @@ unsigned int copy_into(const char *path, FILE *dest) {
 
 	while ((bytes_read = fread(buffer, 1, BUFFER_SIZE, src)) > 0) {
 		bytes_written = fwrite(buffer, 1, bytes_read, dest);
-		error_if(bytes_written != bytes_read, "write error");
+		error_if(bytes_written != bytes_read, "Write error");
 		bytes_total += bytes_written;
 	}
 
@@ -93,15 +101,23 @@ void add_file(const char *path, FILE *dest, qop_state *state) {
 	
 	printf("%6d %016llx %s\n", state->len, hash, path);
 
-	unsigned int offset = state->size;
+	// Write the path into the archive
+	int path_len = strlen(path) + 1;
+	int path_written = fwrite(path, sizeof(char), path_len, dest);
+	error_if(path_written != path_len, "Write error");
+
+	// Copy the file into the archive
 	unsigned int size = copy_into(path, dest);
 
+	// Collect file info for the index
 	state->files[state->len] = (qop_file){
 		.hash = hash,
-		.offset = offset,
-		.size = size
+		.offset = state->size,
+		.size = size,
+		.path_len = path_len,
+		.flags = QOP_FLAG_NONE
 	};
-	state->size += size;
+	state->size += size + path_len;
 	state->len++;
 }
 
@@ -189,7 +205,9 @@ int main(int argc, char **argv) {
 		write_64(index[i].hash, dest);
 		write_32(index[i].offset, dest);
 		write_32(index[i].size, dest);
-		total_size += 16;
+		write_16(index[i].path_len, dest);
+		write_16(index[i].flags, dest);
+		total_size += 20;
 	}
 
 	write_32(total_size, dest);
