@@ -17,14 +17,19 @@ QOP - The “Quite OK Package Format” for bare bones file packages
 -- File format description (pseudo code)
 
 struct {
-	// Data of all files in this archive
-	uint8_t file_data[];
+	// Path string and data of all files in this archive
+	struct {
+		uint8_t path[path_len];
+		uint8_t bytes[size];
+	} file_data[];
 
 	// The index, with a list of files
 	struct {
 		uint64_t hash;
 		uint32_t offset;
 		uint32_t size;
+		uint16_t path_len;
+		uint16_t flags;
 	} qop_file[];
 
 	// Beginning of the archive from file end
