@@ -12,6 +12,7 @@ Command line tool to create and unpack qop archives
 #include <stdlib.h>
 #include <dirent.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #include <errno.h>
 
@@ -268,7 +269,7 @@ void add_dir(const char *path, FILE *dest, pack_state *state) {
 	}
 }
 
-void pack(char **sources, int sources_len, const char *archive_path) {
+void pack(const char *read_dir, char **sources, int sources_len, const char *archive_path) {
 	FILE *dest = fopen(archive_path, "w+");
 	error_if(!dest, "Could not open file %s for writing", archive_path);
 
@@ -279,11 +280,14 @@ void pack(char **sources, int sources_len, const char *archive_path) {
 		.size = 0
 	};
 
+	if (read_dir) {
+		error_if(chdir(read_dir) != 0, "Could not change to directory %s", read_dir);
+	}
+
 	// Add files/directories
 	for (int i = 0; i < sources_len; i++) {
 		struct stat s;
 		error_if(stat(sources[i], &s) != 0, "Could not stat file %s", sources[i]);
-
 		if (S_ISDIR(s.st_mode)) {
 			add_dir(sources[i], dest, &state);
 		}
@@ -339,19 +343,29 @@ void pack(char **sources, int sources_len, const char *archive_path) {
 	printf("files: %d, index len: %d, size: %d bytes\n", state.len, index_len, total_size);
 }
 
-
+void exit_usage(void) {
+	puts(
+		"Usage: qopconv [OPTION...] FILE...\n"
+		"\n"
+		"Examples:\n"
+		"  qopconv dir1 archive.qop          # Create archive.qop from dir1/\n"
+		"  qopconv foo bar archive.qop       # Create archive.qop from files foo and bar\n"
+		"  qoponvv -u archive.qop            # Unpack archive.qop in current directory\n"
+		"  qopconv -l archive.qop            # List files in archive.qop\n"
+		"  qopconv -d dir1 dir2 archive.qop  # Use dir1 prefix for reading, create\n"
+		"                                      archive.qop from files in dir1/dir2/\n"
+		"\n"
+		"Options (mutually exclusive):\n"
+		"  -u <archive> ... unpack archive\n"
+		"  -l <archive> ... list contents of archive\n"
+		"  -d <dir> ....... change read dir when creating archives\n"
+	);
+	exit(1);
+}
 
 int main(int argc, char **argv) {
 	if (argc < 3) {
-		puts("Usage: qopconv [-ul] <infiles/dirs> <outfile.qop>");
-		puts("Examples:");
-		puts("  qopconv dir1 out.qop");
-		puts("  qopconv file1 file2 dir1 out.qop");
-		puts("Unpack archive:");
-		puts("  qopconv -u archive.qop");
-		puts("List archive contents:");
-		puts("  qopconv -l archive.qop");
-		exit(1);
+		exit_usage();
 	}
 
 	// Unpack
@@ -362,7 +376,16 @@ int main(int argc, char **argv) {
 		unpack(argv[2], 1);
 	}
 	else {
-		pack(argv + 1, argc - 2, argv[argc-1]);
+		int files_start = 1;
+		char *read_dir = NULL;
+		if (strcmp(argv[1], "-d") == 0) {
+			read_dir = argv[2];
+			files_start = 3;
+		}
+		if (argc < 2 + files_start) {
+			exit_usage();
+		}
+		pack(read_dir, argv + files_start, argc - 1 - files_start, argv[argc-1]);
 	}
 	return 0;
 }
