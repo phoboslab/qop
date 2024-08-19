@@ -4,7 +4,7 @@ Copyright (c) 2024, Dominic Szablewski - https://phoboslab.org
 SPDX-License-Identifier: MIT
 
 
-Command line tool to create qop archives
+Command line tool to create and unpack qop archives
 
 */
 

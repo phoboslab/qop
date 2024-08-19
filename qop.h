@@ -87,7 +87,7 @@ int qop_open(const char *path, qop_desc *qop);
 // Read the index from an opened archive. The supplied buffer will be filled
 // with the index data and must be at least qop->index_size bytes long.
 // No ownership is taken of the buffer; if you allocated it with malloc() you
-// need to free() it yourself after qop_clore();
+// need to free() it yourself after qop_close();
 int qop_read_index(qop_desc *qop, void *buffer);
 
 // Close the archive
@@ -240,14 +240,14 @@ int qop_read(qop_desc *qop, qop_file *file, unsigned char *dest) {
 	return fread(dest, 1, file->size, qop->fh);
 }
 
-int qop_read_path(qop_desc *qop, qop_file *file, char *dest) {
-	fseek(qop->fh, qop->files_offset + file->offset, SEEK_SET);
-	return fread(dest, 1, file->path_len, qop->fh);
-}
-
 int qop_read_ex(qop_desc *qop, qop_file *file, unsigned char *dest, unsigned int start, unsigned int len) {
 	fseek(qop->fh, qop->files_offset + file->offset + file->path_len + start, SEEK_SET);
 	return fread(dest, 1, len, qop->fh);
+}
+
+int qop_read_path(qop_desc *qop, qop_file *file, char *dest) {
+	fseek(qop->fh, qop->files_offset + file->offset, SEEK_SET);
+	return fread(dest, 1, file->path_len, qop->fh);
 }
 
 #endif /* QOP_IMPLEMENTATION */
