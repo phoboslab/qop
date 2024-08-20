@@ -35,8 +35,8 @@ struct {
 	// Beginning of the archive from file end
 	uint32_t files_offset; 
 
-	// The length of the index in `1 << index_bits`
-	uint32_t index_bits;
+	// The number of files in the index
+	uint32_t index_len;
 
 	// Magic bytes "qopf"
 	uint32_t magic;
@@ -57,6 +57,7 @@ extern "C" {
 #endif
 
 #include <stdio.h>
+#include <string.h>
 
 #define QOP_FLAG_NONE               0
 #define QOP_FLAG_COMPRESSED_ZSTD    1
@@ -72,11 +73,12 @@ typedef struct {
 
 typedef struct {
 	FILE *fh;
-	qop_file *index;
+	qop_file *hashmap;
 	unsigned int files_offset;
 	unsigned int index_offset;
 	unsigned int index_len;
-	unsigned int index_size;
+	unsigned int hashmap_len;
+	unsigned int hashmap_size;
 } qop_desc;
 
 // Open an archive at path. The supplied qop_desc will be filled with the
@@ -85,7 +87,7 @@ typedef struct {
 int qop_open(const char *path, qop_desc *qop);
 
 // Read the index from an opened archive. The supplied buffer will be filled
-// with the index data and must be at least qop->index_size bytes long.
+// with the index data and must be at least qop->hashmap_size bytes long.
 // No ownership is taken of the buffer; if you allocated it with malloc() you
 // need to free() it yourself after qop_close();
 int qop_read_index(qop_desc *qop, void *buffer);
@@ -127,6 +129,7 @@ typedef unsigned long long qop_uint64_t;
 	(((unsigned int)'q') <<  0 | ((unsigned int)'o') <<  8 | \
 	 ((unsigned int)'p') << 16 | ((unsigned int)'f') << 24)
 #define QOP_HEADER_SIZE 12
+#define QOP_INDEX_SIZE 20
 
 // MurmurOAAT64
 static inline qop_uint64_t qop_hash(const char *key) {
@@ -181,36 +184,50 @@ int qop_open(const char *path, qop_desc *qop) {
 	}
 
 	qop->fh = fh;
-	qop->index = NULL;
+	qop->hashmap = NULL;
 	qop->files_offset  = size - qop_read_32(fh);
-	unsigned int index_bits = qop_read_32(fh);
+	unsigned int index_len = qop_read_32(fh);
 	unsigned int magic = qop_read_32(fh);
 
-	// Check magic, make sure index size is within bounds
-	if (magic != QOP_MAGIC || index_bits == 0 || index_bits > 30) {
+	// Check magic, make sure index_len is possible with the file size
+	if (magic != QOP_MAGIC && index_len < (unsigned int)size * QOP_INDEX_SIZE) {
 		fclose(fh);
 		return 0;
 	}
-	qop->index_len = (1 << index_bits);
-	qop->index_size = qop->index_len * sizeof(qop_file);
 
-	// Actual index size in the file might be different from the qop->index_size
-	// because of alignment, so always calculate index_offset with the packed
-	// 20 byte size.
-	qop->index_offset = size - qop->index_len * 20 - QOP_HEADER_SIZE;
+	// Find a good size for the hashmap: power of 2, at least 1.5x num entries
+	unsigned int hashmap_len = 1;
+	unsigned int min_hashmap_len = index_len * 1.5;
+	while (hashmap_len < min_hashmap_len) {
+		hashmap_len <<= 1;
+	}
+
+	qop->index_len = index_len;
+	qop->index_offset = size - qop->index_len * QOP_INDEX_SIZE - QOP_HEADER_SIZE;
+	qop->hashmap_len = hashmap_len;
+	qop->hashmap_size = qop->hashmap_len * sizeof(qop_file);
 	return size;	
 }
 
 int qop_read_index(qop_desc *qop, void *buffer) {
-	qop->index = buffer;
+	qop->hashmap = buffer;
+	int mask = qop->hashmap_len - 1;
 
+	memset(qop->hashmap, 0, qop->hashmap_size);
 	fseek(qop->fh, qop->index_offset, SEEK_SET);
+
 	for (unsigned int i = 0; i < qop->index_len; i++) {
-		qop->index[i].hash     = qop_read_64(qop->fh);
-		qop->index[i].offset   = qop_read_32(qop->fh);
-		qop->index[i].size     = qop_read_32(qop->fh);
-		qop->index[i].path_len = qop_read_16(qop->fh);
-		qop->index[i].flags    = qop_read_16(qop->fh);
+		qop_uint64_t hash = qop_read_64(qop->fh);
+
+		int idx = hash & mask;
+		while (qop->hashmap[idx].size > 0) {
+			idx = (idx + 1) & mask;
+		}
+		qop->hashmap[idx].hash     = hash;
+		qop->hashmap[idx].offset   = qop_read_32(qop->fh);
+		qop->hashmap[idx].size     = qop_read_32(qop->fh);
+		qop->hashmap[idx].path_len = qop_read_16(qop->fh);
+		qop->hashmap[idx].flags    = qop_read_16(qop->fh);
 	}
 	return qop->index_len;
 }
@@ -220,17 +237,19 @@ void qop_close(qop_desc *qop) {
 }
 
 qop_file *qop_find(qop_desc *qop, const char *path) {
-	if (qop->index == NULL) {
+	if (qop->hashmap == NULL) {
 		return NULL;
 	}
 
-	int mask = qop->index_len - 1;
+	int mask = qop->hashmap_len - 1;
 
 	qop_uint64_t hash = qop_hash(path);
-	for (int idx = hash & mask; qop->index[idx].size > 0; idx++) {
-		if (qop->index[idx & mask].hash == hash) {
-			return &qop->index[idx];
+	int idx = hash & mask;
+	while (qop->hashmap[idx].size > 0) {
+		if (qop->hashmap[idx].hash == hash) {
+			return &qop->hashmap[idx];
 		}
+		idx = (idx + 1) & mask;
 	}
 	return NULL;
 }

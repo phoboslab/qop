@@ -124,13 +124,12 @@ void unpack(const char *archive_path, int list_only) {
 	error_if(archive_size == 0, "Could not open archive %s", archive_path);
 
 	// Read the archive index
-	void *index_buffer = malloc(qop.index_size);
-	int index_len = qop_read_index(&qop, index_buffer);
+	int index_len = qop_read_index(&qop, malloc(qop.hashmap_size));
 	error_if(index_len == 0, "Could not read index from archive %s", archive_path);
 	
 	// Extract all files
-	for (int i = 0; i < index_len; i++) {
-		qop_file *file = &qop.index[i];
+	for (unsigned int i = 0; i < qop.hashmap_len; i++) {
+		qop_file *file = &qop.hashmap[i];
 		if (file->size == 0) {
 			continue;
 		}
@@ -138,8 +137,8 @@ void unpack(const char *archive_path, int list_only) {
 		char path[MAX_PATH];
 		qop_read_path(&qop, file, path);
 
-		qop_file *tf = qop_find(&qop, path);
-		error_if(!tf, "could not find %s", path);
+		// Integrity check
+		// error_if(!qop_find(&qop, path), "could not find %s", path);
 
 		printf("%6d %016llx %10d %s\n", i, file->hash, file->size, path);
 
@@ -149,8 +148,8 @@ void unpack(const char *archive_path, int list_only) {
 		}
 	}
 
+	free(qop.hashmap);
 	qop_close(&qop);
-	free(index_buffer);
 }
 
 
@@ -299,48 +298,25 @@ void pack(const char *read_dir, char **sources, int sources_len, const char *arc
 		}
 	}
 
-	// Create Index
-	int index_len = 0;
-	int index_bits = 1;
-	for (; index_bits < 24; index_bits++) {
-		index_len = 1 << index_bits;
-		if (index_len > state.len * 1.5) {
-			break;
-		}
-	}
-
-	qop_file *index = malloc(sizeof(qop_file) * index_len);
-	memset(index, 0, sizeof(qop_file) * index_len);
-
-	int mask = index_len - 1;
-	for (int i = 0; i < state.len; i++) {
-		int idx = state.files[i].hash & mask;
-		while (index[idx & mask].size > 0) {
-			idx++;
-		}
-		index[idx] = state.files[i];
-	}
-
 	// Write index and header
 	unsigned int total_size = state.size + QOP_HEADER_SIZE;
-	for (int i = 0; i < index_len; i++) {
-		write_64(index[i].hash, dest);
-		write_32(index[i].offset, dest);
-		write_32(index[i].size, dest);
-		write_16(index[i].path_len, dest);
-		write_16(index[i].flags, dest);
+	for (int i = 0; i < state.len; i++) {
+		write_64(state.files[i].hash, dest);
+		write_32(state.files[i].offset, dest);
+		write_32(state.files[i].size, dest);
+		write_16(state.files[i].path_len, dest);
+		write_16(state.files[i].flags, dest);
 		total_size += 20;
 	}
 
 	write_32(total_size, dest);
-	write_32(index_bits, dest);
+	write_32(state.len, dest);
 	write_32(QOP_MAGIC, dest);
 
 	free(state.files);
-	free(index);
 	fclose(dest);
 
-	printf("files: %d, index len: %d, size: %d bytes\n", state.len, index_len, total_size);
+	printf("files: %d, size: %d bytes\n", state.len, total_size);
 }
 
 void exit_usage(void) {

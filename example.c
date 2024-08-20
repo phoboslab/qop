@@ -14,8 +14,7 @@ int main(int argc, char *argv[]) {
 	assert(archive_size > 0);
 
 	// Read the archive index
-	void *index_buffer = malloc(qop.index_size);
-	int index_len = qop_read_index(&qop, index_buffer);
+	int index_len = qop_read_index(&qop, malloc(qop.hashmap_size));
 	assert(index_len > 0);
 
 	// Find a file
@@ -29,6 +28,6 @@ int main(int argc, char *argv[]) {
 	printf("%.*s\n", (int)file->size, contents);
 	free(contents);
 
+	free(qop.hashmap);
 	qop_close(&qop);
-	free(index_buffer);
 }
