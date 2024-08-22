@@ -37,7 +37,7 @@ struct {
 
 	// The size of the whole archive, including the header
 	uint32_t archive_size; 
-	
+
 	// Magic bytes "qopf"
 	uint32_t magic;
 } qop;
@@ -60,8 +60,9 @@ extern "C" {
 #include <string.h>
 
 #define QOP_FLAG_NONE               0
-#define QOP_FLAG_COMPRESSED_ZSTD    1
-#define QOP_FLAG_COMPRESSED_DEFLATE 2
+#define QOP_FLAG_COMPRESSED_ZSTD    (1 << 0)
+#define QOP_FLAG_COMPRESSED_DEFLATE (1 << 1)
+#define QOP_FLAG_ENCRYPTED          (1 << 8)
 
 typedef struct {
 	unsigned long long hash;
@@ -98,13 +99,13 @@ void qop_close(qop_desc *qop);
 // Find a file with the supplied path. Returns NULL if the file is not found
 qop_file *qop_find(qop_desc *qop, const char *path);
 
+// Copy the path of the file into dest. The dest buffer must be at least 
+// file->path_len bytes long. The path is null terminated.
+int qop_read_path(qop_desc *qop, qop_file *file, char *dest);
+
 // Read the whole file into dest. The dest buffer must be at least file->size
 // bytes long.
 int qop_read(qop_desc *qop, qop_file *file, unsigned char *dest);
-
-// Copy the path of the file into dest. The dest buffer must be at least 
-// file->path_len bytes long.
-int qop_read_path(qop_desc *qop, qop_file *file, char *dest);
 
 // Read part of a file into dest. The dest buffer must be at least len bytes
 // long
@@ -258,6 +259,11 @@ qop_file *qop_find(qop_desc *qop, const char *path) {
 	return NULL;
 }
 
+int qop_read_path(qop_desc *qop, qop_file *file, char *dest) {
+	fseek(qop->fh, qop->files_offset + file->offset, SEEK_SET);
+	return fread(dest, 1, file->path_len, qop->fh);
+}
+
 int qop_read(qop_desc *qop, qop_file *file, unsigned char *dest) {
 	fseek(qop->fh, qop->files_offset + file->offset + file->path_len, SEEK_SET);
 	return fread(dest, 1, file->size, qop->fh);
@@ -268,9 +274,5 @@ int qop_read_ex(qop_desc *qop, qop_file *file, unsigned char *dest, unsigned int
 	return fread(dest, 1, len, qop->fh);
 }
 
-int qop_read_path(qop_desc *qop, qop_file *file, char *dest) {
-	fseek(qop->fh, qop->files_offset + file->offset, SEEK_SET);
-	return fread(dest, 1, file->path_len, qop->fh);
-}
 
 #endif /* QOP_IMPLEMENTATION */
