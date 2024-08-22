@@ -190,7 +190,10 @@ int qop_open(const char *path, qop_desc *qop) {
 	unsigned int magic = qop_read_32(fh);
 
 	// Check magic, make sure index_len is possible with the file size
-	if (magic != QOP_MAGIC && index_len < (unsigned int)size * QOP_INDEX_SIZE) {
+	if (
+		magic != QOP_MAGIC &&
+		index_len * QOP_INDEX_SIZE <= (unsigned int)(size - QOP_HEADER_SIZE)
+	) {
 		fclose(fh);
 		return 0;
 	}
