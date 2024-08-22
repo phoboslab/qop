@@ -32,12 +32,12 @@ struct {
 		uint16_t flags;
 	} qop_file[];
 
-	// Beginning of the archive from file end
-	uint32_t files_offset; 
-
 	// The number of files in the index
 	uint32_t index_len;
 
+	// The size of the whole archive, including the header
+	uint32_t archive_size; 
+	
 	// Magic bytes "qopf"
 	uint32_t magic;
 } qop;
@@ -185,8 +185,8 @@ int qop_open(const char *path, qop_desc *qop) {
 
 	qop->fh = fh;
 	qop->hashmap = NULL;
-	qop->files_offset  = size - qop_read_32(fh);
 	unsigned int index_len = qop_read_32(fh);
+	unsigned int archive_size = qop_read_32(fh);
 	unsigned int magic = qop_read_32(fh);
 
 	// Check magic, make sure index_len is possible with the file size
@@ -205,6 +205,7 @@ int qop_open(const char *path, qop_desc *qop) {
 		hashmap_len <<= 1;
 	}
 
+	qop->files_offset  = size - archive_size;
 	qop->index_len = index_len;
 	qop->index_offset = size - qop->index_len * QOP_INDEX_SIZE - QOP_HEADER_SIZE;
 	qop->hashmap_len = hashmap_len;
