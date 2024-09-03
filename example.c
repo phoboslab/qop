@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdlib.h>
 
+#define UNUSED(x) (void)(x)
 
 #define QOP_IMPLEMENTATION
 #include "qop.h"
@@ -14,7 +15,7 @@
 	#include <windows.h>
 #endif
 
-int get_executable_path(char *buffer, int buffer_size) {
+int get_executable_path(char *buffer, unsigned int buffer_size) {
 	#if defined(__linux__)
 		ssize_t len = readlink("/proc/self/exe", buffer, buffer_size - 1);
 		if (len == -1) {
@@ -23,7 +24,6 @@ int get_executable_path(char *buffer, int buffer_size) {
 		buffer[len] = '\0';
 		return len;
 	#elif defined(__APPLE__)
-		uint32_t size = sizeof(path);
 		if (_NSGetExecutablePath(buffer, &buffer_size) == 0) {
 			return buffer_size;
 		}
@@ -34,7 +34,10 @@ int get_executable_path(char *buffer, int buffer_size) {
 	return 0;
 }
 
-int main(int, char *[]) {
+int main(int argc, char *argv[]) {
+	UNUSED(argc);
+	UNUSED(argv);
+	
 	// Find the path to the current executable
 	char exe_path[1024];
 	int exe_path_len = get_executable_path(exe_path, sizeof(exe_path));

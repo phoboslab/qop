@@ -250,7 +250,7 @@ void add_dir(const char *path, FILE *dest, pack_state *state) {
 	error_if(!dir, "Could not open directory %s for reading", path);
 
 	struct dirent *file;
-	for (int i = 0; (file = readdir(dir)) != NULL; i++) {
+	while ((file = readdir(dir))) {
 		if (
 			file->d_type & DT_DIR &&
 			strcmp(file->d_name, ".") != 0 &&
