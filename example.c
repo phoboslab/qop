@@ -5,12 +5,44 @@
 #define QOP_IMPLEMENTATION
 #include "qop.h"
 
-int main(int argc, char *argv[]) {
-	assert(argc > 0);
+#if defined(__linux__)
+	#include <unistd.h>
+	#include <stdio.h>
+#elif defined(__APPLE__)
+	#include <mach-o/dyld.h>
+#elif defined(_WIN32)
+	#include <windows.h>
+#endif
 
-	// Open the archive from argv[0] - the executable
+int get_executable_path(char *buffer, int buffer_size) {
+	#if defined(__linux__)
+		ssize_t len = readlink("/proc/self/exe", buffer, buffer_size - 1);
+		if (len == -1) {
+			return 0;
+		}
+		buffer[len] = '\0';
+		return len;
+	#elif defined(__APPLE__)
+		uint32_t size = sizeof(path);
+		if (_NSGetExecutablePath(buffer, &buffer_size) == 0) {
+			return buffer_size;
+		}
+	#elif defined(_WIN32)
+		return GetModuleFileName(NULL, buffer, buffer_size);
+	#endif
+
+	return 0;
+}
+
+int main(int, char *[]) {
+	// Find the path to the current executable
+	char exe_path[1024];
+	int exe_path_len = get_executable_path(exe_path, sizeof(exe_path));
+	assert(exe_path_len > 0);
+
+	// Open the archive appended to this executable
 	qop_desc qop;
-	int archive_size = qop_open(argv[0], &qop);
+	int archive_size = qop_open(exe_path, &qop);
 	assert(archive_size > 0);
 
 	// Read the archive index
