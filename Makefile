@@ -6,7 +6,7 @@ all: qopconv
 qopconv: qopconv.c qop.h
 	$(CC) -std=c99 $(CFLAGS) -O3 qopconv.c -o qopconv
 
-example: qopconv example.c
+example: qopconv qop.h example.c
 	$(CC) -std=gnu99 $(CFLAGS) -O3 example.c -o example
 	./qopconv qop.h example_archive.qop
 	cat example example_archive.qop > example_with_archive
