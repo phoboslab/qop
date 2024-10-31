@@ -83,7 +83,7 @@ typedef struct {
 } qop_desc;
 
 // Open an archive at path. The supplied qop_desc will be filled with the
-// information from the file header. Returns the size of the archvie or 0 on
+// information from the file header. Returns the size of the archive or 0 on
 // failure
 int qop_open(const char *path, qop_desc *qop);
 
