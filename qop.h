@@ -83,8 +83,8 @@ typedef struct {
 } qop_desc;
 
 // Open an archive at path. The supplied qop_desc will be filled with the
-// information from the file header. Returns the size of the archive or 0 on
-// failure
+// information from the file header. Returns the size of the archvie or 0 on
+// failure.
 int qop_open(const char *path, qop_desc *qop);
 
 // Read the index from an opened archive. The supplied buffer will be filled
@@ -94,10 +94,10 @@ int qop_open(const char *path, qop_desc *qop);
 // Returns the number of files in the archive or 0 on error.
 int qop_read_index(qop_desc *qop, void *buffer);
 
-// Close the archive
+// Close the archive.
 void qop_close(qop_desc *qop);
 
-// Find a file with the supplied path. Returns NULL if the file is not found
+// Find a file with the supplied path. Returns NULL if the file is not found.
 qop_file *qop_find(qop_desc *qop, const char *path);
 
 // Copy the path of the file into dest. The dest buffer must be at least 
@@ -107,7 +107,7 @@ int qop_read_path(qop_desc *qop, qop_file *file, char *dest);
 
 // Read the whole file into dest. The dest buffer must be at least file->size
 // bytes long.
-// Returns the number of bytes read
+// Returns the number of bytes read.
 int qop_read(qop_desc *qop, qop_file *file, unsigned char *dest);
 
 // Read part of a file into dest. The dest buffer must be at least len bytes
