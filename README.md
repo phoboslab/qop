@@ -1,6 +1,6 @@
 # QOP - The “Quite OK Package Format” for bare bones file packages
 
-Single-file MIT licensed library for C/C++
+Single-file MIT licensed library for C/C++.
 
 See [qop.h](https://github.com/phoboslab/qop/blob/master/qop.h) for
 the documentation and format specification.
@@ -12,8 +12,8 @@ QOP is a like a minimal version of TAR-Archives. It only stores the actual file
 data, file path and hashes (of file paths) for quick lookup.
 
 The header for QOP is stored at the end of the file. This makes it possible to
-concatenate a QOP archive to any other file and still being load it without
-scanning for a signature.
+concatenate a QOP archive to any other file and still being able to load it
+without scanning for a signature.
 
 E.g. to attach a QOP archive to an executable:
 
